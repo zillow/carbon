@@ -15,34 +15,70 @@ limitations under the License."""
 import time
 from collections import deque
 from carbon.conf import settings
+
 try:
     from collections import defaultdict
 except ImportError:
     from util import defaultdict
 
 
-class _MetricCache(defaultdict):
+class _MetricFlushQueue(object):
+    def __init__(self, cache):
+        self.cache = cache
+        self.seen_metrics = set()
+        self.queue = deque()
+        super(_MetricFlushQueue, self).__init__()
+
+    def next(self):
+      '''Get the next item. There's a trick. This queue repopulates itself
+      by getting a sorted list of keys from the cache.
+      '''
+      try:
+        # usually, just return the next item in the queue
+        return self.queue.pop()
+      except IndexError, ie:
+        # handle the rare "queue empty" event by repopulating the queue
+        t = time.time()
+        items = [item[0] for item in sorted(self.cache.counts, key=lambda x: x[1])]
+        if settings.LOG_CACHE_QUEUE_SORTS:
+          log.msg("Sorted %d cache queues in %.6f seconds" % (len(items), time.time() - t))
+        self.queue.extend(items)
+        return self.queue.pop()
+
+    def prepend(self, metric):
+      '''Prepend a new metric on the front of the flush queue.
+      
+      The new metric won't have any data, but this will get the whisper file
+      on disk so that the metric is visible to graphite. Otherwise, the
+      most recently added metrics don't show up for quite a while.
+      '''
+      if not metric in self.seen_metrics:
+        self.queue.append(metric)
+        self.seen_metrics.add(metric)
+
+
+class _MetricCache(dict):
   def __init__(self, defaultfactory=deque, method="sorted"):
     self.size = 0
     self.method = method
-    if self.method == "sorted":
-      self.queue = self.gen_queue()
+    self.defaultfactory = defaultfactory
+    if self.method in ("sorted", "newest_sorted"):
+      self.queue = _MetricFlushQueue(self)
     else:
       self.queue = False
-    super(_MetricCache, self).__init__(defaultfactory)
-
-  def gen_queue(self):
-    while True:
-      t = time.time()
-      queue = sorted(self.counts, key=lambda x: x[1])
-      if settings.LOG_CACHE_QUEUE_SORTS:
-        log.msg("Sorted %d cache queues in %.6f seconds" % (len(queue), time.time() - t))
-      while queue:
-        yield queue.pop()[0]
+    super(_MetricCache, self).__init__()
 
   def store(self, metric, datapoint):
     self.size += 1
-    self[metric].append(datapoint)
+    try:
+      self[metric].append(datapoint)
+    except KeyError, ke:
+      self[metric] = self.defaultfactory()
+      self[metric].append(datapoint)
+      if self.method == "newest_sorted":
+        # notice a new metric, put it at the front of the flush queue
+        self.queue.prepend(metric)
+
     if self.isFull():
       log.msg("MetricCache is full: self.size=%d" % self.size)
       events.cacheFull()
@@ -63,7 +99,7 @@ class _MetricCache(defaultdict):
       datapoints = (metric, super(_MetricCache, self).pop(metric))
     elif not metric and self.method == "naive":
       datapoints = self.popitem()
-    elif not metric and self.method == "sorted":
+    elif not metric and self.method in ("sorted", "newest_sorted"):
       metric = self.queue.next()
       # Save only last value for each timestamp
       popped = super(_MetricCache, self).pop(metric)
