@@ -28,6 +28,17 @@ state.events = events
 state.instrumentation = instrumentation
 
 
+class CarbonReceiverFactory(ServerFactory):
+  def buildProtocol(self, addr):
+    from carbon.conf import settings
+
+    # Don't establish the connection if we have reached the limit.
+    if len(state.connectedMetricReceiverProtocols) < settings.MAX_RECEIVER_CONNECTIONS:
+      return ServerFactory.buildProtocol(self, addr)
+    else:
+      return None
+
+
 class CarbonRootService(MultiService):
   """Root Service that properly configures twistd logging"""
 
@@ -40,8 +51,6 @@ class CarbonRootService(MultiService):
 def createBaseService(config, settings):
     root_service = CarbonRootService()
     root_service.setName(settings.program)
-
-    setupReceivers(root_service, settings)
 
     if settings.USE_WHITELIST:
       from carbon.regexlist import WhiteList, BlackList
@@ -101,6 +110,7 @@ def createCacheService(config):
 
   root_service = createBaseService(config, settings)
   setupPipeline(['write'], root_service, settings)
+  setupReceivers(root_service, settings)
 
   return root_service
 
@@ -111,6 +121,7 @@ def createAggregatorService(config):
   settings.RELAY_METHOD = 'consistent-hashing'
   root_service = createBaseService(config, settings)
   setupPipeline(['rewrite:pre', 'aggregate', 'rewrite:post', 'relay'], root_service, settings)
+  setupReceivers(root_service, settings)
 
   return root_service
 
@@ -120,6 +131,8 @@ def createRelayService(config):
 
   root_service = createBaseService(config, settings)
   setupPipeline(['relay'], root_service, settings)
+  setupReceivers(root_service, settings)
+
   return root_service
 
 
@@ -131,7 +144,7 @@ def setupReceivers(root_service, settings):
       (MetricPickleReceiver, settings.PICKLE_RECEIVER_INTERFACE, settings.PICKLE_RECEIVER_PORT)
     ]:
     if port:
-      factory = ServerFactory()
+      factory = CarbonReceiverFactory()
       factory.protocol = protocol
       service = TCPServer(port, factory, interface=interface)
       service.setServiceParent(root_service)

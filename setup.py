@@ -34,8 +34,10 @@ else:
         cf.add_section('install')
     except ConfigParser.DuplicateSectionError:
         pass
-    cf.set('install', 'prefix', '/opt/graphite')
-    cf.set('install', 'install-lib', '%(prefix)s/lib')
+    if not cf.has_option('install', 'prefix'):
+        cf.set('install', 'prefix', '/opt/graphite')
+    if not cf.has_option('install', 'install-lib'):
+        cf.set('install', 'install-lib', '%(prefix)s/lib')
 
 with open('setup.cfg', 'wb') as f:
     cf.write(f)
@@ -78,6 +80,16 @@ try:
       package_data={ 'carbon' : ['*.xml'] },
       data_files=install_files,
       install_requires=['Twisted', 'txAMQP'],
+      classifiers=(
+        'Intended Audience :: Developers',
+        'Natural Language :: English',
+        'License :: OSI Approved :: Apache Software License',
+        'Programming Language :: Python',
+        'Programming Language :: Python :: 2',
+        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 2 :: Only',
+      ),
+
       **setup_kwargs
     )
 finally:

@@ -21,8 +21,8 @@ from os.path import join, dirname, normpath, exists, isdir
 from optparse import OptionParser
 from ConfigParser import ConfigParser
 
-import whisper
-from carbon import log
+from carbon import log, state
+from carbon.database import TimeSeriesDatabase
 from carbon.exceptions import CarbonConfigException
 
 from twisted.python import usage
@@ -40,22 +40,27 @@ defaults = dict(
   UDP_RECEIVER_PORT=2003,
   PICKLE_RECEIVER_INTERFACE='0.0.0.0',
   PICKLE_RECEIVER_PORT=2004,
+  MAX_RECEIVER_CONNECTIONS=float('inf'),
   CACHE_QUERY_INTERFACE='0.0.0.0',
   CACHE_QUERY_PORT=7002,
   LOG_UPDATES=True,
   LOG_CACHE_HITS=True,
   LOG_CACHE_QUEUE_SORTS=True,
+  DATABASE='whisper',
   WHISPER_AUTOFLUSH=False,
   WHISPER_SPARSE_CREATE=False,
   WHISPER_FALLOCATE_CREATE=False,
   WHISPER_LOCK_WRITES=False,
+  WHISPER_FADVISE_RANDOM=False,
   MAX_DATAPOINTS_PER_MESSAGE=500,
   MAX_AGGREGATION_INTERVALS=5,
+  FORWARD_ALL=True,
   MAX_QUEUE_SIZE=1000,
   QUEUE_LOW_WATERMARK_PCT=0.8,
   TIME_TO_DEFER_SENDING=0.0001,
   ENABLE_AMQP=False,
   AMQP_VERBOSE=False,
+  AMQP_SPEC=None,
   BIND_PATTERNS=['#'],
   ENABLE_MANHOLE=False,
   MANHOLE_INTERFACE='127.0.0.1',
@@ -235,22 +240,16 @@ class CarbonCacheOptions(usage.Options):
             print "Error: missing required config %s" % storage_schemas
             sys.exit(1)
 
-        if settings.WHISPER_AUTOFLUSH:
-            log.msg("Enabling Whisper autoflush")
-            whisper.AUTOFLUSH = True
+        # Database-specific settings
+        database = settings.DATABASE
+        if database not in TimeSeriesDatabase.plugins:
+            print "No database plugin implemented for '%s'" % database
+            raise SystemExit(1)
 
-        if settings.WHISPER_FALLOCATE_CREATE:
-            if whisper.CAN_FALLOCATE:
-                log.msg("Enabling Whisper fallocate support")
-            else:
-                log.err("WHISPER_FALLOCATE_CREATE is enabled but linking failed.")
+        database_class = TimeSeriesDatabase.plugins[database]
+        state.database = database_class(settings)
 
-        if settings.WHISPER_LOCK_WRITES:
-            if whisper.CAN_LOCK:
-                log.msg("Enabling Whisper file locking")
-                whisper.LOCK = True
-            else:
-                log.err("WHISPER_LOCK_WRITES is enabled but import of fcntl module failed.")
+        settings.CACHE_SIZE_LOW_WATERMARK = settings.MAX_CACHE_SIZE * 0.95
 
         if not "action" in self:
             self["action"] = "start"

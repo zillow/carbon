@@ -60,7 +60,7 @@ class CarbonClientProtocol(Int32StringReceiver):
 
   def sendDatapoint(self, metric, datapoint):
     self.factory.enqueue(metric, datapoint)
-    reactor.callLater(settings.TIME_TO_DEFER_SENDING, self.sendQueued)
+    self.factory.scheduleSend()
 
   def _sendDatapoints(self, datapoints):
       self.sendString(pickle.dumps(datapoints, protocol=-1))
@@ -90,7 +90,6 @@ class CarbonClientProtocol(Int32StringReceiver):
     of 10ms per send, so the queue should drain with an order of
     minutes, which seems more realistic.
     """
-    chained_invocation_delay = 0.0001
     queueSize = self.factory.queueSize
 
     if self.paused:
@@ -98,7 +97,7 @@ class CarbonClientProtocol(Int32StringReceiver):
       return
     if not self.factory.hasQueuedDatapoints():
       return
-    
+
     if settings.USE_RATIO_RESET is True:
       if not self.connectionQualityMonitor():
         self.resetConnectionForQualityReasons("Sent: {0}, Received: {1}".format(
@@ -111,7 +110,7 @@ class CarbonClientProtocol(Int32StringReceiver):
       if not self.factory.queueHasSpace.called:
         self.factory.queueHasSpace.callback(queueSize)
     if self.factory.hasQueuedDatapoints():
-      reactor.callLater(chained_invocation_delay, self.sendQueued)
+      self.factory.scheduleSend()
 
 
   def connectionQualityMonitor(self):
@@ -180,11 +179,21 @@ class CarbonClientFactory(ReconnectingClientFactory):
     self.connectFailed = Deferred()
     self.connectionMade = Deferred()
     self.connectionLost = Deferred()
+    self.deferSendPending = None
     # Define internal metric names
     self.attemptedRelays = 'destinations.%s.attemptedRelays' % self.destinationName
     self.fullQueueDrops = 'destinations.%s.fullQueueDrops' % self.destinationName
     self.queuedUntilConnected = 'destinations.%s.queuedUntilConnected' % self.destinationName
     self.relayMaxQueueLength = 'destinations.%s.relayMaxQueueLength' % self.destinationName
+
+  def scheduleSend(self):
+    if self.deferSendPending and self.deferSendPending.active():
+      return
+    self.deferSendPending = reactor.callLater(settings.TIME_TO_DEFER_SENDING, self.sendQueued)
+
+  def sendQueued(self):
+    if self.connectedProtocol:
+      self.connectedProtocol.sendQueued()
 
   def queueFullCallback(self, result):
     state.events.cacheFull()
@@ -262,7 +271,7 @@ class CarbonClientFactory(ReconnectingClientFactory):
       self.enqueue(metric, datapoint)
 
     if self.connectedProtocol:
-      reactor.callLater(settings.TIME_TO_DEFER_SENDING, self.connectedProtocol.sendQueued)
+      self.scheduleSend()
     else:
       instrumentation.increment(self.queuedUntilConnected)
 
@@ -281,7 +290,7 @@ class CarbonClientFactory(ReconnectingClientFactory):
     self.enqueue_from_left(metric, datapoint)
 
     if self.connectedProtocol:
-      reactor.callLater(settings.TIME_TO_DEFER_SENDING, self.connectedProtocol.sendQueued)
+      self.scheduleSend()
     else:
       instrumentation.increment(self.queuedUntilConnected)
 
@@ -336,7 +345,7 @@ class CarbonClientManager(Service):
 
   def stopService(self):
     Service.stopService(self)
-    self.stopAllClients()
+    return self.stopAllClients()
 
   def startClient(self, destination):
     if destination in self.client_factories:

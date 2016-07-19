@@ -2,6 +2,7 @@
 language: python
 python:
     - 2.7
+    - pypy
 
 env:
     - TOXENV=ci
@@ -13,3 +14,5 @@ install:
 
 script:
     - tox -e $TOXENV
+
+sudo: false

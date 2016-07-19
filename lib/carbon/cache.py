@@ -15,6 +15,7 @@ limitations under the License."""
 import time
 from operator import itemgetter
 from random import choice
+from collections import defaultdict
 
 from carbon.conf import settings
 from carbon import events, log
@@ -42,6 +43,23 @@ class DrainStrategy(object):
 
   def choose_item(self):
     raise NotImplemented
+
+
+class NaiveStrategy(DrainStrategy):
+  """Pop points in an unordered fashion."""
+  def __init__(self, cache):
+    super(NaiveStrategy, self).__init__(cache)
+
+    def _generate_queue():
+      while True:
+        metric_names = self.cache.keys()
+        while metric_names:
+          yield metric_names.pop()
+
+    self.queue = _generate_queue()
+
+  def choose_item(self):
+    return self.queue.next()
 
 
 class MaxStrategy(DrainStrategy):
@@ -82,16 +100,14 @@ class SortedStrategy(DrainStrategy):
     return self.queue.next()
 
 
-class _MetricCache(dict):
+class _MetricCache(defaultdict):
   """A Singleton dictionary of metric names and lists of their datapoints"""
   def __init__(self, strategy=None):
     self.size = 0
     self.strategy = None
     if strategy:
       self.strategy = strategy(self)
-
-  def __setitem__(self, key, value):
-    raise TypeError("Use store() method instead!")
+    super(_MetricCache, self).__init__(dict)
 
   @property
   def counts(self):
@@ -106,7 +122,7 @@ class _MetricCache(dict):
 
   def _check_available_space(self):
     if state.cacheTooFull and self.size < settings.CACHE_SIZE_LOW_WATERMARK:
-      log.msg("cache size below watermark")
+      log.msg("MetricCache below watermark: self.size=%d" % self.size)
       events.cacheSpaceAvailable()
 
   def drain_metric(self):
@@ -126,14 +142,13 @@ class _MetricCache(dict):
     return sorted(self.get(metric, {}).items(), key=by_timestamp)
 
   def pop(self, metric):
-    datapoint_index = dict.pop(self, metric)
+    datapoint_index = defaultdict.pop(self, metric)
     self.size -= len(datapoint_index)
     self._check_available_space()
 
     return sorted(datapoint_index.items(), key=by_timestamp)
 
   def store(self, metric, datapoint):
-    self.setdefault(metric, {})
     timestamp, value = datapoint
     if timestamp not in self[metric]:
       # Not a duplicate, hence process if cache is not full
@@ -150,6 +165,8 @@ class _MetricCache(dict):
 
 # Initialize a singleton cache instance
 write_strategy = None
+if settings.CACHE_WRITE_STRATEGY == 'naive':
+  write_strategy = NaiveStrategy
 if settings.CACHE_WRITE_STRATEGY == 'max':
   write_strategy = MaxStrategy
 if settings.CACHE_WRITE_STRATEGY == 'sorted':
