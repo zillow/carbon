@@ -100,6 +100,54 @@ class SortedStrategy(DrainStrategy):
     return self.queue.next()
 
 
+class NewThenSortedStrategy(DrainStrategy):
+  """Prefer new metrics, then greater numbers of cached points.
+
+  Graphite can't read a metric until it is flushed to disk for the first
+  time. With large caches, there can be minutes of delay between write
+  and read.
+
+  Flush the metrics we haven't seen yet first.
+  """
+  def __init__(self, cache):
+    super(NewThenSortedStrategy, self).__init__(cache)
+
+    self.seen_metrics = set()
+    self.queue = deque()
+
+    def store_wrapper(func):
+      def observe_and_store(other, metric, datapoint, *args, **kwargs):
+        if not metric in self.seen_metrics:
+          self.queue.append(metric)
+        return func(other, metric, datapoint, *args, **kwargs)
+      return observe_and_store
+
+    # wire up an observer on the cache store call, so we can detect the new
+    # metric names
+    self.cache.store = store_wrapper(self.cache.store)
+
+
+  def choose_item(self):
+    try:
+      # usually just return the next item in the queue
+      return self.queue.pop()
+    except IndexError, ie:
+      # when the queue is empty, repopulate it
+      t = time.time()
+      items = [item[0] for item in sorted(self.cache.counts, key=lambda x: x[1])]
+      if settings.LOG_CACHE_QUEUE_SORTS:
+        log.msg("Sorted %d cache queues in %.6f seconds" % (len(items), time.time() - t))
+
+      # if the new queue is empty - return None, no metric to flush
+      # this won't actually happen. If the condition ever did happen, the generator
+      # in the Sorted strategy would infinite loop on us... better to return None
+      if not items:
+        return None
+
+      self.queue.extend(items)
+      return self.queue.pop()
+
+
 class _MetricCache(defaultdict):
   """A Singleton dictionary of metric names and lists of their datapoints"""
   def __init__(self, strategy=None):
@@ -171,6 +219,8 @@ if settings.CACHE_WRITE_STRATEGY == 'max':
   write_strategy = MaxStrategy
 if settings.CACHE_WRITE_STRATEGY == 'sorted':
   write_strategy = SortedStrategy
+if settings.CACHE_WRITE_STRATEGY == 'new_sorted':
+  write_strategy = NewThenSortedStrategy
 if settings.CACHE_WRITE_STRATEGY == 'random':
   write_strategy = RandomStrategy
 
