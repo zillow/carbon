@@ -15,7 +15,7 @@ limitations under the License."""
 import time
 from operator import itemgetter
 from random import choice
-from collections import defaultdict
+from collections import defaultdict, deque
 
 from carbon.conf import settings
 from carbon import events, log
@@ -116,16 +116,19 @@ class NewThenSortedStrategy(DrainStrategy):
     self.queue = deque()
 
     def store_wrapper(func):
-      def observe_and_store(other, metric, datapoint, *args, **kwargs):
+      def observe_and_store(metric, datapoint, *args, **kwargs):
         if not metric in self.seen_metrics:
+          # put any metric we haven't seen yet at the head of the queue. This approximates
+          # the goal of writing metrics that aren't on the filesystem out first... on a long
+          # running system it'll get pretty close.
+          self.seen_metrics.add(metric)
           self.queue.append(metric)
-        return func(other, metric, datapoint, *args, **kwargs)
+        return func(metric, datapoint, *args, **kwargs)
       return observe_and_store
 
     # wire up an observer on the cache store call, so we can detect the new
     # metric names
     self.cache.store = store_wrapper(self.cache.store)
-
 
   def choose_item(self):
     try:

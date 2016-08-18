@@ -1,7 +1,7 @@
 import timeit
 
 from carbon.cache import _MetricCache, DrainStrategy, \
-    NaiveStrategy, MaxStrategy, RandomStrategy, SortedStrategy
+    NaiveStrategy, MaxStrategy, RandomStrategy, SortedStrategy, NewThenSortedStrategy
 
 
 metric_cache = _MetricCache(DrainStrategy)
@@ -11,6 +11,7 @@ strategies = {
     'max': MaxStrategy,
     'random': RandomStrategy,
     'sorted': SortedStrategy,
+    'new_sorted': NewThenSortedStrategy,
 }
 
 def command_store_foo():
