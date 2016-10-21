@@ -10,6 +10,9 @@ from carbon.conf import settings
 from carbon.regexlist import WhiteList, BlackList
 from carbon.util import pickle, get_unpickler
 from carbon.util import PluginRegistrar
+from carbon import writer
+
+SCHEMAS = writer.SCHEMAS
 
 
 class CarbonReceiverFactory(ServerFactory):
@@ -222,6 +225,18 @@ class CacheManagementHandler(Int32StringReceiver):
 
     elif request['type'] == 'set-metadata':
       result = management.setMetadata(request['metric'], request['key'], request['value'])
+
+    elif request['type'] == 'get-storageschema':
+      global SCHEMAS
+      metric = request['metric']
+      for schema in SCHEMAS:
+        if schema.matches(metric):
+          log.query('metric %s matched schema %s' % (metric, schema.name))
+          archiveConfig = [archive.getTuple() for archive in schema.archives]
+          break
+      log.query('metric %s matched schema %s %s' % (metric, schema.name, schema.pattern))
+
+      result = dict(name=schema.name, pattern=schema.pattern, archives=archiveConfig)
 
     else:
       result = dict(error="Invalid request type \"%s\"" % request['type'])
