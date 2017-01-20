@@ -69,7 +69,7 @@ def optimalWriteOrder():
         yield (metric, datapoints, dbFileExists)
       else:
         # In case we don't have enough bucket for creating new metrics
-        # at this moment, do not drop these new moment. Instead, let's
+        # at this moment, do not drop these new metric. Instead, let's
         # push all new metrics back to memcache if possible.
         for timestamp, value in datapoints.iteritems():
           MetricCache.store(metric, (timestamp, value))
