@@ -71,6 +71,11 @@ def optimalWriteOrder():
         # In case we don't have enough bucket for creating new metrics
         # at this moment, do not drop these new metric. Instead, let's
         # push all new metrics back to memcache if possible.
+        #
+        # Attention:
+        # If adopt MaxStrategy, then we should be careful about the
+        # new metrics push back behavior. That could cause potential
+        # dead loop.
         for timestamp, value in datapoints.iteritems():
           MetricCache.store(metric, (timestamp, value))
       continue
