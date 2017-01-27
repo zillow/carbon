@@ -75,8 +75,8 @@ def optimalWriteOrder():
         # Attention:
         # If adopt MaxStrategy, then we should be careful about the
         # new metrics push back behavior. That could cause potential
-        # dead loop.
-        for timestamp, value in datapoints.iteritems():
+        # dead loop for a while.
+        for timestamp, value in datapoints:
           MetricCache.store(metric, (timestamp, value))
       continue
 
