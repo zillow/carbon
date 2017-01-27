@@ -76,6 +76,7 @@ def optimalWriteOrder():
         # If adopt MaxStrategy, then we should be careful about the
         # new metrics push back behavior. That could cause potential
         # dead loop for a while.
+        log.creates("Cannot create wsp for metric {0}".format(metric))
         for timestamp, value in datapoints:
           MetricCache.store(metric, (timestamp, value))
       continue
