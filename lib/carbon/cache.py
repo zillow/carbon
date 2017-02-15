@@ -23,7 +23,7 @@ from carbon import events, log
 from carbon.pipeline import Processor
 
 
-def by_timestamp((timestamp, value)):  # useful sort key function
+def by_timestamp((timestamp, (value, is_flushed))):  # useful sort key function
   return timestamp
 
 
@@ -89,7 +89,7 @@ class SortedStrategy(DrainStrategy):
     def _generate_queue():
       while True:
         t = time.time()
-        metric_counts = sorted(self.cache.counts, key=lambda x: x[1])
+        metric_counts = sorted(self.cache.unflush_counts, key=lambda x: x[1])
         if settings.LOG_CACHE_QUEUE_SORTS:
           log.msg("Sorted %d cache queues in %.6f seconds" % (len(metric_counts), time.time() - t))
         while metric_counts:
@@ -106,6 +106,9 @@ class _MetricCache(defaultdict):
   def __init__(self, strategy=None):
     self.lock = threading.Lock()
     self.size = 0
+    # This helps to check if there is any unflushed datapoints in memcache,
+    # helps to avoid infinity loop in writer. otherwise, needs O(n) to check.
+    self.total_unflushed = 0
     self.strategy = None
     if strategy:
       self.strategy = strategy(self)
@@ -116,11 +119,20 @@ class _MetricCache(defaultdict):
     return [(metric, len(datapoints)) for (metric, datapoints) in self.items()]
 
   @property
+  def unflush_counts(self):
+    return [(metric, len(datapoints)) for (metric, datapoints) in self.items()]
+    # return [(metric, len([(value) for (value, is_flushed) in datapoints if not is_flushed])) for (metric, datapoints) in self.items()]
+
+  @property
   def is_full(self):
     if settings.MAX_CACHE_SIZE == float('inf'):
       return False
     else:
       return self.size >= settings.MAX_CACHE_SIZE
+
+  @property
+  def all_flushed(self):
+    return self.total_unflushed == 0
 
   def _check_available_space(self):
     if state.cacheTooFull and self.size < settings.CACHE_SIZE_LOW_WATERMARK:
@@ -137,11 +149,42 @@ class _MetricCache(defaultdict):
     else:
       # Avoid .keys() as it dumps the whole list
       metric = self.iterkeys().next()
-    return (metric, self.pop(metric))
+
+    # Do not pop all datapoints for this metric.
+    # Instead, retain last N datapoints in carbon cache.
+    datapoints = self.pop(metric)
+
+    # retain last N datapoints in carbon cache,
+    # let's push them back
+    for i in range(1, settings.MAX_RETAINED_LATEST_DATAPOINTS + 1):
+      if i > len(datapoints):
+        break
+      timestamp, tup = datapoints[-i]
+      value, is_flushed = tup
+      self.store(metric, (timestamp, value), is_flushed=True)
+
+    # Actions before returning
+    # 1. filter out datapoints that have been already flushed.
+    # 2. strip out is_flushed field, as for keeping same interface as before
+    datapoints = [(timestamp, value) for (timestamp, (value, is_flushed)) in datapoints if not is_flushed]
+
+    # Update total_unflushed
+    with self.lock:
+      self.total_unflushed -= len(datapoints)
+
+    return (metric, datapoints)
 
   def get_datapoints(self, metric):
     """Return a list of currently cached datapoints sorted by timestamp"""
-    return sorted(self.get(metric, {}).items(), key=by_timestamp)
+    # let's keep old interface, strip out is_flushed before return
+
+    datapoints = sorted(self.get(metric, {}).items(), key=by_timestamp)
+    return [(timestamp, value) for (timestamp, (value, is_flushed)) in datapoints]
+
+  def get_unsorted_datapoints(self, metric):
+    """Return a list of currently unsorted cached datapoints"""
+    # let's keep old interface, strip out is_flushed before return
+    return [(timestamp, value) for (timestamp, (value, is_flushed)) in self.get(metric, {}).items()]
 
   def pop(self, metric):
     with self.lock:
@@ -151,7 +194,7 @@ class _MetricCache(defaultdict):
 
     return sorted(datapoint_index.items(), key=by_timestamp)
 
-  def store(self, metric, datapoint):
+  def store(self, metric, datapoint, is_flushed=False):
     timestamp, value = datapoint
     if timestamp not in self[metric]:
       # Not a duplicate, hence process if cache is not full
@@ -161,10 +204,12 @@ class _MetricCache(defaultdict):
       else:
         with self.lock:
           self.size += 1
-          self[metric][timestamp] = value
+          if not is_flushed: 
+            self.total_unflushed += 1
+          self[metric][timestamp] = (value, is_flushed)
     else:
       # Updating a duplicate does not increase the cache size
-      self[metric][timestamp] = value
+      self[metric][timestamp] = (value, is_flushed)
 
 
 # Initialize a singleton cache instance

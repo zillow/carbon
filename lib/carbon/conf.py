@@ -32,6 +32,7 @@ from twisted.python import usage
 defaults = dict(
   USER="",
   MAX_CACHE_SIZE=float('inf'),
+  MAX_RETAINED_LATEST_DATAPOINTS=180,
   MAX_UPDATES_PER_SECOND=500,
   MAX_CREATES_PER_MINUTE=float('inf'),
   LINE_RECEIVER_INTERFACE='0.0.0.0',
