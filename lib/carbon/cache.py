@@ -120,8 +120,7 @@ class _MetricCache(defaultdict):
 
   @property
   def unflush_counts(self):
-    return [(metric, len(datapoints)) for (metric, datapoints) in self.items()]
-    # return [(metric, len([(value) for (value, is_flushed) in datapoints if not is_flushed])) for (metric, datapoints) in self.items()]
+    return [(metric, len([(value, is_flushed) for (value, is_flushed) in datapoints if not is_flushed])) for (metric, datapoints) in self.items()]
 
   @property
   def is_full(self):
