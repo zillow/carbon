@@ -222,9 +222,15 @@ class CacheManagementHandler(Int32StringReceiver):
 
     elif request['type'] == 'cache-query-precheck':
       metric = request['metric']
+      timestamp = request.get('timestamp')
       if settings.LOG_CACHE_HITS:
         log.query('[%s] cache query for \"%s\" precheck' % (self.peerAddr, metric))
       exists = metric in MetricCache
+      if timestamp:
+        sorted_datapoints = MetricCache.get_datapoints(metric)
+        if sorted_datapoints:
+          ts, value = sorted_datapoints[0]
+          exists = exists and (ts <= timestamp)
       result = dict(exists=exists)
 
     elif request['type'] == 'get-metadata':
