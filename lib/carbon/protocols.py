@@ -220,6 +220,13 @@ class CacheManagementHandler(Int32StringReceiver):
       instrumentation.increment('cacheBulkQueries')
       instrumentation.append('cacheBulkQuerySize', len(metrics))
 
+    elif request['type'] == 'cache-query-precheck':
+      metric = request['metric']
+      if settings.LOG_CACHE_HITS:
+        log.query('[%s] cache query for \"%s\" precheck' % (self.peerAddr, metric))
+      exists = metric in MetricCache
+      result = dict(exists=exists)
+
     elif request['type'] == 'get-metadata':
       result = management.getMetadata(request['metric'], request['key'])
 

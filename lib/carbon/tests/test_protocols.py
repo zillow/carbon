@@ -110,3 +110,8 @@ class TestCacheManagementHandler(TestCase):
     }
     self.send_request('get-storageschema', metric='carbon.foo')
     self.assertEquals(expected_response, self.response)
+
+  def test_cache_query_precheck_response(self):
+    self.cache.store('carbon.foo', (600, 1.0))
+    self.send_request('cache-query-precheck', metric='carbon.foo')
+    self.assertEquals({'exists': True}, self.response)
