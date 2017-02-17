@@ -184,9 +184,7 @@ class _MetricCache(defaultdict):
   def get_datapoints(self, metric):
     """Return a list of currently cached datapoints sorted by timestamp"""
     # let's keep old interface, strip out is_flushed before return
-
-    datapoints = sorted(self.get(metric, {}).items(), key=by_timestamp)
-    return [(timestamp, value) for (timestamp, (value, is_flushed)) in datapoints]
+    return sorted(self.get_unsorted_datapoints(metric), key=lambda tup: tup[0])
 
   def get_unsorted_datapoints(self, metric):
     """Return a list of currently unsorted cached datapoints"""
