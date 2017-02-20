@@ -109,6 +109,10 @@ class _MetricCache(defaultdict):
     # This helps to check if there is any unflushed datapoints in memcache,
     # helps to avoid infinity loop in writer. otherwise, needs O(n) to check.
     self.total_unflushed = 0
+
+    # Let's also keep track of unflush_counts for each metric
+    self.metric_unflush_counts = defaultdict(int)
+
     self.strategy = None
     if strategy:
       self.strategy = strategy(self)
@@ -120,7 +124,7 @@ class _MetricCache(defaultdict):
 
   @property
   def unflush_counts(self):
-    return [(metric, self._count_unflushed(datapoints)) for (metric, datapoints) in self.items()]
+    return [(metric, self._count_unflushed(metric)) for (metric, datapoints) in self.items()]
 
   @property
   def is_full(self):
@@ -133,13 +137,8 @@ class _MetricCache(defaultdict):
   def all_flushed(self):
     return self.total_unflushed == 0
 
-  def _count_unflushed(self, datapoints):
-    count = 0
-    for timestamp, tup in datapoints.iteritems():
-      value, is_flushed = tup
-      if not is_flushed:
-        count += 1
-    return count
+  def _count_unflushed(self, metric):
+    return self.metric_unflush_counts[metric]
 
   def _check_available_space(self):
     if state.cacheTooFull and self.size < settings.CACHE_SIZE_LOW_WATERMARK:
@@ -178,6 +177,7 @@ class _MetricCache(defaultdict):
     # Update total_unflushed
     with self.lock:
       self.total_unflushed -= len(datapoints)
+      self.metric_unflush_counts[metric] -= len(datapoints)
 
     return (metric, datapoints)
 
@@ -211,6 +211,7 @@ class _MetricCache(defaultdict):
           self.size += 1
           if not is_flushed: 
             self.total_unflushed += 1
+            self.metric_unflush_counts[metric] += 1
           self[metric][timestamp] = (value, is_flushed)
     else:
       # Updating a duplicate does not increase the cache size
