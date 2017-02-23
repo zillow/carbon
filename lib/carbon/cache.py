@@ -113,6 +113,12 @@ class _MetricCache(defaultdict):
     # Let's also keep track of unflush_counts for each metric
     self.metric_unflush_counts = defaultdict(int)
 
+    # If we haven't received a metric for two hours,
+    # let's drop its datapoints. Before dropping, make sure
+    # its datapoints have been flushed.
+    # {metric: timestamp}
+    self.last_received_timestamps = defaultdict(int)
+
     self.strategy = None
     if strategy:
       self.strategy = strategy(self)
@@ -179,6 +185,22 @@ class _MetricCache(defaultdict):
       self.total_unflushed -= len(datapoints)
       self.metric_unflush_counts[metric] -= len(datapoints)
 
+    # 1) latest datatpoints receivced two hours ago or even older.
+    # 2) all dataponts of that metric have been flushed already.
+    if len(datapoints) == 0:
+      time_now = int(time.time())
+      oldest_timestamp = time_now - 120
+      if self.last_received_timestamps[metric] < oldest_timestamp:
+        with self.lock:
+          # remove the entry in unflush_counts map
+          self.metric_unflush_counts.pop(metric, None)
+          # remove the entry in last_received_timestamps map
+          self.last_received_timestamps.pop(metric, None)
+
+        if metric in self:
+          self.pop(metric)
+          log.msg("MetricCache drops latest datapoints for metric {0}...".format(metric))
+
     return (metric, datapoints)
 
   def get_datapoints(self, metric):
@@ -212,6 +234,9 @@ class _MetricCache(defaultdict):
           if not is_flushed: 
             self.total_unflushed += 1
             self.metric_unflush_counts[metric] += 1
+
+          if self.last_received_timestamps[metric] < timestamp:
+            self.last_received_timestamps[metric] = timestamp
           self[metric][timestamp] = (value, is_flushed)
     else:
       # Updating a duplicate does not increase the cache size
