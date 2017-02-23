@@ -189,7 +189,7 @@ class _MetricCache(defaultdict):
     # 2) all dataponts of that metric have been flushed already.
     if len(datapoints) == 0:
       time_now = int(time.time())
-      oldest_timestamp = time_now - 120
+      oldest_timestamp = time_now - settings.MAX_TIME_GAP_FOR_MISSING_DATA
       if self.last_received_timestamps[metric] < oldest_timestamp:
         with self.lock:
           # remove the entry in unflush_counts map
