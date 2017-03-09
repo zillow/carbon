@@ -244,10 +244,10 @@ class CacheManagementHandler(Int32StringReceiver):
       metric = request['metric']
       for schema in SCHEMAS:
         if schema.matches(metric):
-          log.query('metric %s matched schema %s' % (metric, schema.name))
           archiveConfig = [archive.getTuple() for archive in schema.archives]
           break
-      log.query('metric %s matched schema %s %s' % (metric, schema.name, schema.pattern))
+      if settings.LOG_CACHE_HITS:
+        log.query('metric %s matched schema %s %s' % (metric, schema.name, schema.pattern))
 
       result = dict(name=schema.name, pattern=schema.pattern, archives=archiveConfig)
 
