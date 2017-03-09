@@ -199,7 +199,8 @@ class _MetricCache(defaultdict):
 
         if metric in self:
           self.pop(metric)
-          log.msg("MetricCache drops latest datapoints for metric {0}...".format(metric))
+          if settings.LOG_DROP_LATEST_DATAPOINTS:
+            log.msg("MetricCache drops latest datapoints for metric {0}...".format(metric))
 
     return (metric, datapoints)
 
