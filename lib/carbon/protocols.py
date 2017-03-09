@@ -10,6 +10,9 @@ from carbon.conf import settings
 from carbon.regexlist import WhiteList, BlackList
 from carbon.util import pickle, get_unpickler
 from carbon.util import PluginRegistrar
+from carbon import writer
+
+SCHEMAS = writer.SCHEMAS
 
 
 class CarbonReceiverFactory(ServerFactory):
@@ -197,7 +200,7 @@ class CacheManagementHandler(Int32StringReceiver):
     request = self.unpickler.loads(rawRequest)
     if request['type'] == 'cache-query':
       metric = request['metric']
-      datapoints = MetricCache.get(metric, {}).items()
+      datapoints = MetricCache.get_unsorted_datapoints(metric)
       result = dict(datapoints=datapoints)
       if settings.LOG_CACHE_HITS:
         log.query('[%s] cache query for \"%s\" returned %d values' % (self.peerAddr, metric, len(datapoints)))
@@ -207,7 +210,7 @@ class CacheManagementHandler(Int32StringReceiver):
       datapointsByMetric = {}
       metrics = request['metrics']
       for metric in metrics:
-        datapointsByMetric[metric] = MetricCache.get(metric, {}).items()
+        datapointsByMetric[metric] = MetricCache.get_unsorted_datapoints(metric)
 
       result = dict(datapointsByMetric=datapointsByMetric)
 
@@ -217,11 +220,36 @@ class CacheManagementHandler(Int32StringReceiver):
       instrumentation.increment('cacheBulkQueries')
       instrumentation.append('cacheBulkQuerySize', len(metrics))
 
+    elif request['type'] == 'cache-query-precheck':
+      metric = request['metric']
+      timestamp = request.get('timestamp')
+      if settings.LOG_CACHE_HITS:
+        log.query('[%s] cache query for \"%s\" precheck' % (self.peerAddr, metric))
+      exists = metric in MetricCache
+      if timestamp:
+        sorted_datapoints = MetricCache.get_datapoints(metric)
+        if sorted_datapoints:
+          ts, value = sorted_datapoints[0]
+          exists = exists and (ts <= timestamp)
+      result = dict(exists=exists)
+
     elif request['type'] == 'get-metadata':
       result = management.getMetadata(request['metric'], request['key'])
 
     elif request['type'] == 'set-metadata':
       result = management.setMetadata(request['metric'], request['key'], request['value'])
+
+    elif request['type'] == 'get-storageschema':
+      global SCHEMAS
+      metric = request['metric']
+      for schema in SCHEMAS:
+        if schema.matches(metric):
+          log.query('metric %s matched schema %s' % (metric, schema.name))
+          archiveConfig = [archive.getTuple() for archive in schema.archives]
+          break
+      log.query('metric %s matched schema %s %s' % (metric, schema.name, schema.pattern))
+
+      result = dict(name=schema.name, pattern=schema.pattern, archives=archiveConfig)
 
     else:
       result = dict(error="Invalid request type \"%s\"" % request['type'])

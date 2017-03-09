@@ -32,6 +32,8 @@ from twisted.python import usage
 defaults = dict(
   USER="",
   MAX_CACHE_SIZE=float('inf'),
+  MAX_RETAINED_LATEST_DATAPOINTS=180,
+  MAX_TIME_GAP_FOR_MISSING_DATA=7200,
   MAX_UPDATES_PER_SECOND=500,
   MAX_CREATES_PER_MINUTE=float('inf'),
   LINE_RECEIVER_INTERFACE='0.0.0.0',
@@ -47,6 +49,7 @@ defaults = dict(
   LOG_UPDATES=True,
   LOG_CACHE_HITS=True,
   LOG_CACHE_QUEUE_SORTS=True,
+  LOG_DROP_LATEST_DATAPOINTS=False,
   DATABASE='whisper',
   WHISPER_AUTOFLUSH=False,
   WHISPER_SPARSE_CREATE=False,

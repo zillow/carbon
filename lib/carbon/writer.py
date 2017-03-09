@@ -53,7 +53,7 @@ if settings.MAX_UPDATES_PER_SECOND != float('inf'):
 def optimalWriteOrder():
   """Generates metrics with the most cached values first and applies a soft
   rate limit on new metrics"""
-  while MetricCache:
+  while not MetricCache.all_flushed:
     (metric, datapoints) = MetricCache.drain_metric()
     dbFileExists = state.database.exists(metric)
 
@@ -67,6 +67,18 @@ def optimalWriteOrder():
       # reason.
       if CREATE_BUCKET.drain(1):
         yield (metric, datapoints, dbFileExists)
+      else:
+        # In case we don't have enough bucket for creating new metrics
+        # at this moment, do not drop these new metric. Instead, let's
+        # push all new metrics back to memcache if possible.
+        #
+        # Attention:
+        # If adopt MaxStrategy, then we should be careful about the
+        # new metrics push back behavior. That could cause potential
+        # dead loop for a while.
+        log.creates("Cannot create wsp for metric {0}".format(metric))
+        for timestamp, value in datapoints:
+          MetricCache.store(metric, (timestamp, value))
       continue
 
     yield (metric, datapoints, dbFileExists)
@@ -75,7 +87,7 @@ def optimalWriteOrder():
 def writeCachedDataPoints():
   "Write datapoints until the MetricCache is completely empty"
 
-  while MetricCache:
+  while not MetricCache.all_flushed:
     dataWritten = False
 
     for (metric, datapoints, dbFileExists) in optimalWriteOrder():

@@ -2,6 +2,7 @@ from unittest import TestCase
 from mock import Mock, patch
 from carbon.cache import _MetricCache
 
+
 import os.path
 import pickle
 
@@ -98,3 +99,29 @@ class TestCacheManagementHandler(TestCase):
     expected_response = {'carbon.foo': [(600, 1.0)], 'carbon.bar': [(600, 2.0)]}
     self.send_request('cache-query-bulk', metrics=['carbon.foo', 'carbon.bar'])
     self.assertEquals({'datapointsByMetric': expected_response}, self.response)
+
+  def test_get_storage_schema_query_response(self):
+    from carbon.storage import Archive
+    metric = 'carbon.foo'
+    expected_response = {
+      'name': 'carbon',
+      'pattern': '^carbon\.',
+      'archives': [Archive.fromString('60:90d').getTuple()]
+    }
+    self.send_request('get-storageschema', metric='carbon.foo')
+    self.assertEquals(expected_response, self.response)
+
+  def test_cache_query_precheck_response(self):
+    self.cache.store('carbon.foo', (600, 1.0))
+    self.send_request('cache-query-precheck', metric='carbon.foo')
+    self.assertEquals({'exists': True}, self.response)
+
+  def test_cache_query_precheck_with_timestamp_False_response(self):
+    self.cache.store('carbon.foo', (600, 1.0))
+    self.send_request('cache-query-precheck', metric='carbon.foo', timestamp=599)
+    self.assertEquals({'exists': False}, self.response)
+
+  def test_cache_query_precheck_with_timestamp_False_response(self):
+    self.cache.store('carbon.foo', (600, 1.0))
+    self.send_request('cache-query-precheck', metric='carbon.foo', timestamp=601)
+    self.assertEquals({'exists': True}, self.response)

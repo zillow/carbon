@@ -26,21 +26,21 @@ class MetricCacheTest(TestCase):
   def test_store_new_metric(self):
     self.metric_cache.store('foo', (123456, 1.0))
     self.assertEqual(1, self.metric_cache.size)
-    self.assertEqual([(123456, 1.0)], self.metric_cache['foo'].items())
+    self.assertEqual([(123456, (1.0, False))], self.metric_cache['foo'].items())
 
   def test_store_multiple_datapoints(self):
     self.metric_cache.store('foo', (123456, 1.0))
     self.metric_cache.store('foo', (123457, 2.0))
     self.assertEqual(2, self.metric_cache.size)
     result = self.metric_cache['foo'].items()
-    self.assertTrue((123456, 1.0) in result)
-    self.assertTrue((123457, 2.0) in result)
+    self.assertTrue((123456, (1.0, False)) in result)
+    self.assertTrue((123457, (2.0, False)) in result)
 
   def test_store_duplicate_timestamp(self):
     self.metric_cache.store('foo', (123456, 1.0))
     self.metric_cache.store('foo', (123456, 2.0))
     self.assertEqual(1, self.metric_cache.size)
-    self.assertEqual([(123456, 2.0)], self.metric_cache['foo'].items())
+    self.assertEqual([(123456, (2.0, False))], self.metric_cache['foo'].items())
 
   def test_store_checks_fullness(self):
     is_full_mock = PropertyMock()
@@ -61,8 +61,8 @@ class MetricCacheTest(TestCase):
     self.metric_cache.store('foo', (123456, 1.0))
     self.metric_cache.store('foo', (123457, 2.0))
     result = self.metric_cache.pop('foo')
-    self.assertTrue((123456, 1.0) in result)
-    self.assertTrue((123457, 2.0) in result)
+    self.assertTrue((123456, (1.0, False)) in result)
+    self.assertTrue((123457, (2.0, False)) in result)
 
   def test_pop_reduces_size(self):
     self.metric_cache.store('foo', (123456, 1.0))
@@ -88,7 +88,7 @@ class MetricCacheTest(TestCase):
     self.metric_cache.store('foo', (123458, 3.0))
     self.metric_cache.store('foo', (123456, 1.0))
     result = self.metric_cache.pop('foo')
-    expected = [(123456, 1.0), (123457, 2.0), (123458, 3.0)]
+    expected = [(123456, (1.0, False)), (123457, (2.0, False)), (123458, (3.0, False))]
     self.assertEqual(expected, result)
 
   def test_pop_raises_on_missing(self):
