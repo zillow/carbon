@@ -49,6 +49,7 @@ defaults = dict(
   LOG_UPDATES=True,
   LOG_CACHE_HITS=True,
   LOG_CACHE_QUEUE_SORTS=True,
+  LOG_CREATES=False,
   LOG_DROP_LATEST_DATAPOINTS=False,
   DATABASE='whisper',
   WHISPER_AUTOFLUSH=False,
