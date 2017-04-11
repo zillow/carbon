@@ -80,7 +80,7 @@ try:
       scripts=glob('bin/*'),
       package_data={ 'carbon' : ['*.xml'] },
       data_files=install_files,
-      install_requires=['Twisted', 'txAMQP'],
+      install_requires=['Twisted', 'txAMQP', 'carbon-index'],
       classifiers=(
         'Intended Audience :: Developers',
         'Natural Language :: English',
