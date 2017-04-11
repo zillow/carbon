@@ -233,6 +233,13 @@ class CacheManagementHandler(Int32StringReceiver):
           exists = exists and (ts <= timestamp)
       result = dict(exists=exists)
 
+    elif request['type'] == 'cache-query-expand-wildcards':
+      metric = request['metric']
+      if settings.LOG_CACHE_HITS:
+        log.query('[%s] cache query for \"%s\" precheck' % (self.peerAddr, metric))
+      queries = MetricCache.expand_wildcard_query(metric)
+      result = dict(queries=queries)
+
     elif request['type'] == 'get-metadata':
       result = management.getMetadata(request['metric'], request['key'])
 

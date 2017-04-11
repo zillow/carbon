@@ -161,6 +161,15 @@ class MetricCacheTest(TestCase):
     self.assertTrue(('foo', 2) in self.metric_cache.counts)
     self.assertTrue(('bar', 1) in self.metric_cache.counts)
 
+  def test_carbon_index_expand_query(self):
+    self.metric_cache.store('test.foo', (123456, 1.0))
+    self.metric_cache.store('test.baz', (123457, 2.0))
+    self.metric_cache.store('test.bar', (123458, 3.0))
+    query_list = self.metric_cache.expand_wildcard_query('test.*')
+    self.assertEqual(sorted(query_list), ['test.bar', 'test.baz', 'test.foo'])
+    query_list = self.metric_cache.expand_wildcard_query('test.{bar,baz,foo}')
+    self.assertEqual(sorted(query_list), ['test.bar', 'test.baz', 'test.foo'])
+
 
 class DrainStrategyTest(TestCase):
   def setUp(self):

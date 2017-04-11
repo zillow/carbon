@@ -22,6 +22,8 @@ from carbon.conf import settings
 from carbon import events, log
 from carbon.pipeline import Processor
 
+from carbon_index.index import CarbonIndex
+
 
 def by_timestamp((timestamp, (value, is_flushed))):  # useful sort key function
   return timestamp
@@ -119,6 +121,9 @@ class _MetricCache(defaultdict):
     # {metric: timestamp}
     self.last_received_timestamps = defaultdict(int)
 
+    # Build an index for carbon cache
+    self.index = CarbonIndex()
+
     self.strategy = None
     if strategy:
       self.strategy = strategy(self)
@@ -196,6 +201,8 @@ class _MetricCache(defaultdict):
           self.metric_unflush_counts.pop(metric, None)
           # remove the entry in last_received_timestamps map
           self.last_received_timestamps.pop(metric, None)
+          # remove the index from CarbonIndex
+          self.index.delete(metric)
 
         if metric in self:
           self.pop(metric)
@@ -213,6 +220,10 @@ class _MetricCache(defaultdict):
     """Return a list of currently unsorted cached datapoints"""
     # let's keep old interface, strip out is_flushed before return
     return [(timestamp, value) for (timestamp, (value, is_flushed)) in self.get(metric, {}).items()]
+
+  def expand_wildcard_query(self, metric):
+    """ expand wildcard query """
+    return self.index.expand_query(metric)
 
   def pop(self, metric):
     with self.lock:
@@ -238,6 +249,10 @@ class _MetricCache(defaultdict):
 
           if self.last_received_timestamps[metric] < timestamp:
             self.last_received_timestamps[metric] = timestamp
+
+          # create an index for new metrics
+          if len(self[metric]) == 0:
+            self.index.insert(metric)
           self[metric][timestamp] = (value, is_flushed)
     else:
       # Updating a duplicate does not increase the cache size
