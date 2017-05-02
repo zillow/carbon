@@ -171,6 +171,10 @@ class MetricCacheTest(TestCase):
     self.assertEqual(sorted(query_list), [('test.bar', True), ('test.baz', True), ('test.foo', True)])
     query_list = self.metric_cache.expand_wildcard_query('*')
     self.assertEqual(sorted(query_list), [('test', False)])
+    query_list = self.metric_cache.expand_wildcard_query('test')
+    self.assertEqual(sorted(query_list), [('test', False)])
+    query_list = self.metric_cache.expand_wildcard_query('hello')
+    self.assertEqual(sorted(query_list), [])
 
 
 class DrainStrategyTest(TestCase):
