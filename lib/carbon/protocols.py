@@ -226,12 +226,13 @@ class CacheManagementHandler(Int32StringReceiver):
       if settings.LOG_CACHE_HITS:
         log.query('[%s] cache query for \"%s\" precheck' % (self.peerAddr, metric))
       exists = metric in MetricCache
+      partial_exists = exists
       if timestamp:
         sorted_datapoints = MetricCache.get_datapoints(metric)
         if sorted_datapoints:
           ts, value = sorted_datapoints[0]
           exists = exists and (ts <= timestamp)
-      result = dict(exists=exists)
+      result = dict(exists=exists, partial_exists=partial_exists)
 
     elif request['type'] == 'cache-query-expand-wildcards':
       metric = request['metric']

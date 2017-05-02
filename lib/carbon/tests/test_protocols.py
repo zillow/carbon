@@ -114,14 +114,14 @@ class TestCacheManagementHandler(TestCase):
   def test_cache_query_precheck_response(self):
     self.cache.store('carbon.foo', (600, 1.0))
     self.send_request('cache-query-precheck', metric='carbon.foo')
-    self.assertEquals({'exists': True}, self.response)
+    self.assertEquals({'exists': True, 'partial_exists': True}, self.response)
 
   def test_cache_query_precheck_with_timestamp_False_response(self):
     self.cache.store('carbon.foo', (600, 1.0))
     self.send_request('cache-query-precheck', metric='carbon.foo', timestamp=599)
-    self.assertEquals({'exists': False}, self.response)
+    self.assertEquals({'exists': False, 'partial_exists': True}, self.response)
 
   def test_cache_query_precheck_with_timestamp_False_response(self):
     self.cache.store('carbon.foo', (600, 1.0))
     self.send_request('cache-query-precheck', metric='carbon.foo', timestamp=601)
-    self.assertEquals({'exists': True}, self.response)
+    self.assertEquals({'exists': True, 'partial_exists': True}, self.response)
