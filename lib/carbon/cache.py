@@ -223,7 +223,7 @@ class _MetricCache(defaultdict):
 
   def expand_wildcard_query(self, metric):
     """ expand wildcard query """
-    return self.index.expand_query(metric)
+    return self.index.expand_pattern(metric)
 
   def pop(self, metric):
     with self.lock:
