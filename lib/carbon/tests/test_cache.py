@@ -166,9 +166,15 @@ class MetricCacheTest(TestCase):
     self.metric_cache.store('test.baz', (123457, 2.0))
     self.metric_cache.store('test.bar', (123458, 3.0))
     query_list = self.metric_cache.expand_wildcard_query('test.*')
-    self.assertEqual(sorted(query_list), ['test.bar', 'test.baz', 'test.foo'])
+    self.assertEqual(sorted(query_list), [('test.bar', True), ('test.baz', True), ('test.foo', True)])
     query_list = self.metric_cache.expand_wildcard_query('test.{bar,baz,foo}')
-    self.assertEqual(sorted(query_list), ['test.bar', 'test.baz', 'test.foo'])
+    self.assertEqual(sorted(query_list), [('test.bar', True), ('test.baz', True), ('test.foo', True)])
+    query_list = self.metric_cache.expand_wildcard_query('*')
+    self.assertEqual(sorted(query_list), [('test', False)])
+    query_list = self.metric_cache.expand_wildcard_query('test')
+    self.assertEqual(sorted(query_list), [('test', False)])
+    query_list = self.metric_cache.expand_wildcard_query('hello')
+    self.assertEqual(sorted(query_list), [])
 
 
 class DrainStrategyTest(TestCase):
