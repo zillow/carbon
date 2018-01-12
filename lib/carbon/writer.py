@@ -53,7 +53,7 @@ if settings.MAX_UPDATES_PER_SECOND != float('inf'):
 def optimalWriteOrder():
   """Generates metrics with the most cached values first and applies a soft
   rate limit on new metrics"""
-  while not MetricCache.all_flushed:
+  while MetricCache:
     (metric, datapoints) = MetricCache.drain_metric()
     dbFileExists = state.database.exists(metric)
 
@@ -88,7 +88,7 @@ def optimalWriteOrder():
 def writeCachedDataPoints():
   "Write datapoints until the MetricCache is completely empty"
 
-  while not MetricCache.all_flushed:
+  while MetricCache:
     dataWritten = False
 
     for (metric, datapoints, dbFileExists) in optimalWriteOrder():
@@ -183,6 +183,9 @@ def shutdownModifyUpdateSpeed():
         if CREATE_BUCKET:
           CREATE_BUCKET.setCapacityAndFillRate(shut,shut)
         log.msg("Carbon shutting down.  Changed the update rate to: " + str(settings.MAX_UPDATES_PER_SECOND_ON_SHUTDOWN))
+
+        # Signaling carbon_cache will shutdown, it don't need to buffering/pushing back data anymore
+        MetricCache.will_shutdown = True
     except KeyError:
         log.msg("Carbon shutting down.  Update rate not changed")
 

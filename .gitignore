@@ -5,3 +5,5 @@ dist
 *.pyc
 .idea
 *.iml
+.tox/
+_trial_temp/
