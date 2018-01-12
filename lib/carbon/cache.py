@@ -112,6 +112,9 @@ class _MetricCache(defaultdict):
     # helps to avoid infinity loop in writer. otherwise, needs O(n) to check.
     self.total_unflushed = 0
 
+    # Signal to shutdown
+    self.will_shutdown = False
+
     # Let's also keep track of unflush_counts for each metric
     self.metric_unflush_counts = defaultdict(int)
 
@@ -171,14 +174,16 @@ class _MetricCache(defaultdict):
     # Instead, retain last N datapoints in carbon cache.
     datapoints = self.pop(metric)
 
-    # retain last N datapoints in carbon cache,
+    # 1. Retain last N datapoints in carbon cache,
     # let's push them back
-    for i in range(1, settings.MAX_RETAINED_LATEST_DATAPOINTS + 1):
-      if i > len(datapoints):
-        break
-      timestamp, tup = datapoints[-i]
-      value, is_flushed = tup
-      self.store(metric, (timestamp, value), is_flushed=True)
+    # 2. Do not push back during shutdown
+    if not self.will_shutdown:
+      for i in range(1, settings.MAX_RETAINED_LATEST_DATAPOINTS + 1):
+        if i > len(datapoints):
+          break
+        timestamp, tup = datapoints[-i]
+        value, is_flushed = tup
+        self.store(metric, (timestamp, value), is_flushed=True)
 
     # Actions before returning
     # 1. filter out datapoints that have been already flushed.
@@ -189,6 +194,10 @@ class _MetricCache(defaultdict):
     with self.lock:
       self.total_unflushed -= len(datapoints)
       self.metric_unflush_counts[metric] -= len(datapoints)
+
+    # Return directly during shutdown
+    if self.will_shutdown:
+      return (metric, datapoints)
 
     # 1) latest datatpoints receivced two hours ago or even older.
     # 2) all dataponts of that metric have been flushed already.
