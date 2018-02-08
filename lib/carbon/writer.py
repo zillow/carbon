@@ -183,6 +183,7 @@ def reloadAggregationSchemas():
 
 def shutdownModifyUpdateSpeed():
     try:
+        global MetricCache
         # Controlled by env vars
         PICKLE_DUMP_PATH = os.environ.get("PICKLE_DUMP_PATH")
         INSTANCE_NAME = os.environ.get("CARBON_CACHE_INSTANCE_NAME")
@@ -191,7 +192,6 @@ def shutdownModifyUpdateSpeed():
           with open(pickle_file_path, 'wb') as handle:
             pickle.dump(MetricCache, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-          global MetricCache
           MetricCache = _MetricCache(write_strategy)
         else:
           shut = settings.MAX_UPDATES_PER_SECOND_ON_SHUTDOWN
