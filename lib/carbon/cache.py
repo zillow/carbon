@@ -13,6 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License."""
 
 import time
+import os
 import threading
 from operator import itemgetter
 from random import choice
@@ -23,6 +24,11 @@ from carbon import events, log
 from carbon.pipeline import Processor
 
 from carbon_index.index import CarbonIndex
+
+try:
+  import cPickle as pickle
+except ImportError:
+  import pickle
 
 
 def by_timestamp((timestamp, (value, is_flushed))):  # useful sort key function
@@ -279,7 +285,18 @@ if settings.CACHE_WRITE_STRATEGY == 'sorted':
 if settings.CACHE_WRITE_STRATEGY == 'random':
   write_strategy = RandomStrategy
 
-MetricCache = _MetricCache(write_strategy)
+
+PICKLE_DUMP_PATH = os.environ.get("PICKLE_DUMP_PATH")
+INSTANCE_NAME = os.environ.get("CARBON_CACHE_INSTANCE_NAME")
+if PICKLE_DUMP_PATH and INSTANCE_NAME:
+  pickle_file_path = os.path.join(PICKLE_DUMP_PATH, "carbon-instance-{}.pickle".format(INSTANCE_NAME))
+  if os.path.isfile(pickle_file_path):
+    with open(pickle_file_path, 'rb') as handle:
+      MetricCache = pickle.load(handle)
+  else:
+    MetricCache = _MetricCache(write_strategy)
+else:
+  MetricCache = _MetricCache(write_strategy)
 
 # Avoid import circularities
 from carbon import state

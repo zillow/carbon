@@ -13,9 +13,10 @@ See the License for the specific language governing permissions and
 limitations under the License."""
 
 import time
+import os
 
 from carbon import state
-from carbon.cache import MetricCache
+from carbon.cache import MetricCache, _MetricCache, write_strategy
 from carbon.storage import loadStorageSchemas, loadAggregationSchemas
 from carbon.conf import settings
 from carbon import log, events, instrumentation
@@ -29,6 +30,11 @@ try:
     import signal
 except ImportError:
     log.msg("Couldn't import signal module")
+
+try:
+  import cPickle as pickle
+except ImportError:
+  import pickle
 
 
 SCHEMAS = loadStorageSchemas()
@@ -177,15 +183,26 @@ def reloadAggregationSchemas():
 
 def shutdownModifyUpdateSpeed():
     try:
-        shut = settings.MAX_UPDATES_PER_SECOND_ON_SHUTDOWN
-        if UPDATE_BUCKET:
-          UPDATE_BUCKET.setCapacityAndFillRate(shut,shut)
-        if CREATE_BUCKET:
-          CREATE_BUCKET.setCapacityAndFillRate(shut,shut)
-        log.msg("Carbon shutting down.  Changed the update rate to: " + str(settings.MAX_UPDATES_PER_SECOND_ON_SHUTDOWN))
+        # Controlled by env vars
+        PICKLE_DUMP_PATH = os.environ.get("PICKLE_DUMP_PATH")
+        INSTANCE_NAME = os.environ.get("CARBON_CACHE_INSTANCE_NAME")
+        if PICKLE_DUMP_PATH and INSTANCE_NAME:
+          pickle_file_path = os.path.join(PICKLE_DUMP_PATH, "carbon-instance-{}.pickle".format(INSTANCE_NAME))
+          with open(pickle_file_path, 'wb') as handle:
+            pickle.dump(MetricCache, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-        # Signaling carbon_cache will shutdown, it don't need to buffering/pushing back data anymore
-        MetricCache.will_shutdown = True
+          global MetricCache
+          MetricCache = _MetricCache(write_strategy)
+        else:
+          shut = settings.MAX_UPDATES_PER_SECOND_ON_SHUTDOWN
+          if UPDATE_BUCKET:
+            UPDATE_BUCKET.setCapacityAndFillRate(shut,shut)
+          if CREATE_BUCKET:
+            CREATE_BUCKET.setCapacityAndFillRate(shut,shut)
+          log.msg("Carbon shutting down.  Changed the update rate to: " + str(settings.MAX_UPDATES_PER_SECOND_ON_SHUTDOWN))
+
+          # Signaling carbon_cache will shutdown, it don't need to buffering/pushing back data anymore
+          MetricCache.will_shutdown = True
     except KeyError:
         log.msg("Carbon shutting down.  Update rate not changed")
 
