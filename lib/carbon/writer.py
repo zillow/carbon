@@ -188,9 +188,27 @@ def shutdownModifyUpdateSpeed():
         PICKLE_DUMP_PATH = os.environ.get("PICKLE_DUMP_PATH")
         INSTANCE_NAME = os.environ.get("CARBON_CACHE_INSTANCE_NAME")
         if PICKLE_DUMP_PATH and INSTANCE_NAME:
-          pickle_file_path = os.path.join(PICKLE_DUMP_PATH, "carbon-instance-{}.pickle".format(INSTANCE_NAME))
-          with open(pickle_file_path, 'wb') as handle:
+
+          instance_pickle_file_path = os.path.join(PICKLE_DUMP_PATH, "carbon-instance-{}.pickle".format(INSTANCE_NAME))
+          metric_unflush_counts_pickle_file_path = os.path.join(PICKLE_DUMP_PATH, "carbon-instance-{}-metric_unflush_counts.pickle".format(INSTANCE_NAME))
+          last_received_timestamps_pickle_file_path = os.path.join(PICKLE_DUMP_PATH, "carbon-instance-{}-last_received_timestamps.pickle".format(INSTANCE_NAME))
+          carbon_index_pickle_file_path = os.path.join(PICKLE_DUMP_PATH, "carbon-instance-{}-carbon_index.pickle".format(INSTANCE_NAME))
+          size_pickle_file_path = os.path.join(PICKLE_DUMP_PATH, "carbon-instance-{}-size.pickle".format(INSTANCE_NAME))
+
+          with open(instance_pickle_file_path, 'wb') as handle:
             pickle.dump(MetricCache, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+          with open(metric_unflush_counts_pickle_file_path, 'wb') as handle:
+            pickle.dump(MetricCache.metric_unflush_counts, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+          with open(last_received_timestamps_pickle_file_path, 'wb') as handle:
+            pickle.dump(MetricCache.last_received_timestamps, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+          with open(carbon_index_pickle_file_path, 'wb') as handle:
+            pickle.dump(MetricCache.index, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+          with open(size_pickle_file_path, 'wb') as handle:
+            pickle.dump(MetricCache.size, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
           MetricCache = _MetricCache(write_strategy)
         else:

@@ -114,9 +114,6 @@ class _MetricCache(defaultdict):
   def __init__(self, strategy=None):
     self.lock = threading.Lock()
     self.size = 0
-    # This helps to check if there is any unflushed datapoints in memcache,
-    # helps to avoid infinity loop in writer. otherwise, needs O(n) to check.
-    self.total_unflushed = 0
 
     # Signal to shutdown
     self.will_shutdown = False
@@ -152,10 +149,6 @@ class _MetricCache(defaultdict):
       return False
     else:
       return self.size >= settings.MAX_CACHE_SIZE
-
-  @property
-  def all_flushed(self):
-    return self.total_unflushed == 0
 
   def _count_unflushed(self, metric):
     return self.metric_unflush_counts[metric]
@@ -196,9 +189,8 @@ class _MetricCache(defaultdict):
     # 2. strip out is_flushed field, as for keeping same interface as before
     datapoints = [(timestamp, value) for (timestamp, (value, is_flushed)) in datapoints if not is_flushed]
 
-    # Update total_unflushed
+    # Update unflushed
     with self.lock:
-      self.total_unflushed -= len(datapoints)
       self.metric_unflush_counts[metric] -= len(datapoints)
 
     # Return directly during shutdown
@@ -259,7 +251,6 @@ class _MetricCache(defaultdict):
         with self.lock:
           self.size += 1
           if not is_flushed: 
-            self.total_unflushed += 1
             self.metric_unflush_counts[metric] += 1
 
           if self.last_received_timestamps[metric] < timestamp:
@@ -289,10 +280,34 @@ if settings.CACHE_WRITE_STRATEGY == 'random':
 PICKLE_DUMP_PATH = os.environ.get("PICKLE_DUMP_PATH")
 INSTANCE_NAME = os.environ.get("CARBON_CACHE_INSTANCE_NAME")
 if PICKLE_DUMP_PATH and INSTANCE_NAME:
-  pickle_file_path = os.path.join(PICKLE_DUMP_PATH, "carbon-instance-{}.pickle".format(INSTANCE_NAME))
-  if os.path.isfile(pickle_file_path):
-    with open(pickle_file_path, 'rb') as handle:
+
+  instance_pickle_file_path = os.path.join(PICKLE_DUMP_PATH, "carbon-instance-{}.pickle".format(INSTANCE_NAME))
+  metric_unflush_counts_pickle_file_path = os.path.join(PICKLE_DUMP_PATH, "carbon-instance-{}-metric_unflush_counts.pickle".format(INSTANCE_NAME))
+  last_received_timestamps_pickle_file_path = os.path.join(PICKLE_DUMP_PATH, "carbon-instance-{}-last_received_timestamps.pickle".format(INSTANCE_NAME))
+  carbon_index_pickle_file_path = os.path.join(PICKLE_DUMP_PATH, "carbon-instance-{}-carbon_index.pickle".format(INSTANCE_NAME))
+  size_pickle_file_path = os.path.join(PICKLE_DUMP_PATH, "carbon-instance-{}-size.pickle".format(INSTANCE_NAME))
+
+  if os.path.isfile(instance_pickle_file_path):
+    with open(instance_pickle_file_path, 'rb') as handle:
       MetricCache = pickle.load(handle)
+
+    if os.path.isfile(metric_unflush_counts_pickle_file_path):
+      with open(metric_unflush_counts_pickle_file_path, 'rb') as handle:
+        MetricCache.metric_unflush_counts = pickle.load(handle)
+
+    if os.path.isfile(last_received_timestamps_pickle_file_path):
+      with open(last_received_timestamps_pickle_file_path, 'rb') as handle:
+        MetricCache.last_received_timestamps = pickle.load(handle)
+
+    if os.path.isfile(carbon_index_pickle_file_path):
+      with open(carbon_index_pickle_file_path, 'rb') as handle:
+        MetricCache.index = pickle.load(handle)
+
+    if os.path.isfile(size_pickle_file_path):
+      with open(size_pickle_file_path, 'rb') as handle:
+        MetricCache.size = pickle.load(handle)
+
+    MetricCache.strategy = write_strategy(MetricCache)
   else:
     MetricCache = _MetricCache(write_strategy)
 else:
