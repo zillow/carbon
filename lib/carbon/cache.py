@@ -277,8 +277,16 @@ if settings.CACHE_WRITE_STRATEGY == 'random':
   write_strategy = RandomStrategy
 
 
+def _cleanup_files(files):
+  for f in files:
+    if os.path.isfile(f):
+      os.unlink(f)
+
+
 PICKLE_DUMP_PATH = os.environ.get("PICKLE_DUMP_PATH")
 INSTANCE_NAME = os.environ.get("CARBON_CACHE_INSTANCE_NAME")
+
+
 if PICKLE_DUMP_PATH and INSTANCE_NAME:
 
   instance_pickle_file_path = os.path.join(PICKLE_DUMP_PATH, "carbon-instance-{}.pickle".format(INSTANCE_NAME))
@@ -287,27 +295,43 @@ if PICKLE_DUMP_PATH and INSTANCE_NAME:
   carbon_index_pickle_file_path = os.path.join(PICKLE_DUMP_PATH, "carbon-instance-{}-carbon_index.pickle".format(INSTANCE_NAME))
   size_pickle_file_path = os.path.join(PICKLE_DUMP_PATH, "carbon-instance-{}-size.pickle".format(INSTANCE_NAME))
 
+  pickled_files = [
+    instance_pickle_file_path,
+    metric_unflush_counts_pickle_file_path,
+    last_received_timestamps_pickle_file_path,
+    carbon_index_pickle_file_path,
+    size_pickle_file_path,
+  ]
+
   if os.path.isfile(instance_pickle_file_path):
-    with open(instance_pickle_file_path, 'rb') as handle:
-      MetricCache = pickle.load(handle)
 
-    if os.path.isfile(metric_unflush_counts_pickle_file_path):
-      with open(metric_unflush_counts_pickle_file_path, 'rb') as handle:
-        MetricCache.metric_unflush_counts = pickle.load(handle)
+    try:
+      with open(instance_pickle_file_path, 'rb') as handle:
+        MetricCache = pickle.load(handle)
 
-    if os.path.isfile(last_received_timestamps_pickle_file_path):
-      with open(last_received_timestamps_pickle_file_path, 'rb') as handle:
-        MetricCache.last_received_timestamps = pickle.load(handle)
+      if os.path.isfile(metric_unflush_counts_pickle_file_path):
+        with open(metric_unflush_counts_pickle_file_path, 'rb') as handle:
+          MetricCache.metric_unflush_counts = pickle.load(handle)
 
-    if os.path.isfile(carbon_index_pickle_file_path):
-      with open(carbon_index_pickle_file_path, 'rb') as handle:
-        MetricCache.index = pickle.load(handle)
+      if os.path.isfile(last_received_timestamps_pickle_file_path):
+        with open(last_received_timestamps_pickle_file_path, 'rb') as handle:
+          MetricCache.last_received_timestamps = pickle.load(handle)
 
-    if os.path.isfile(size_pickle_file_path):
-      with open(size_pickle_file_path, 'rb') as handle:
-        MetricCache.size = pickle.load(handle)
+      if os.path.isfile(carbon_index_pickle_file_path):
+        with open(carbon_index_pickle_file_path, 'rb') as handle:
+          MetricCache.index = pickle.load(handle)
 
-    MetricCache.strategy = write_strategy(MetricCache)
+      if os.path.isfile(size_pickle_file_path):
+        with open(size_pickle_file_path, 'rb') as handle:
+          MetricCache.size = pickle.load(handle)
+
+      MetricCache.strategy = write_strategy(MetricCache)
+    except:
+      MetricCache = _MetricCache(write_strategy)
+    finally:
+      # remove all pickled files
+      _cleanup_files(pickled_files)
+
   else:
     MetricCache = _MetricCache(write_strategy)
 else:
